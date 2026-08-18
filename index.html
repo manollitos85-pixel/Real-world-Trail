@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Map Explorer Pro</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
+    #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+    #map-container { position: relative; flex: 1; width: 100%; }
+    #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #fog-canvas { pointer-events: none; z-index: 400; }
+    
+    #stats-panel { 
+      background: #1e1e1e; 
+      padding: 12px; 
+      border-top-left-radius: 16px; 
+      border-top-right-radius: 16px; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
+      z-index: 1000; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 8px; 
+    }
+
+    .total-banner {
+      background: #2979ff;
+      color: white;
+      text-align: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    .stats-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 6px; 
+      background: #2a2a2a; 
+      padding: 8px; 
+      border-radius: 10px; 
+    }
+    
+    .stat-box { text-align: center; background: #1e1e1e; padding: 6px; border-radius: 6px; }
+    .stat-value { font-size: 15px; font-weight: bold; color: #00e676; }
+    .stat-label { font-size: 10px; color: #aaaaaa; text-transform: uppercase; margin-top: 2px; }
+
+    .mode-container { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 6px 12px; border-radius: 8px; }
+    .mode-label { font-size: 12px; font-weight: bold; color: #ddd; }
+    .switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .3s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #00e676; }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    .button-group { display: flex; gap: 8px; }
+    .btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .btn-primary { background-color: #2979ff; color: white; }
+    .btn-danger { background-color: #ff5252; color: white; }
+
+    .bg-status { font-size: 10px; text-align: center; color: #888; }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <div id="map-container">
+      <div id="map"></div>
+      <canvas id="fog-canvas"></canvas>
+    </div>
+
+    <div id="stats-panel">
+      <div class="total-banner">
+        Ξεκλειδωμένη Περιοχή: <span id="explored-area">0.000</span> km²
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-value" id="walk-distance">0.00 km</div>
+          <div class="stat-label">🚶‍♂️ Πεζή (&lt;15 km/h)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="car-distance">0.00 km</div>
+          <div class="stat-label">🚗 Με Όχημα (&ge;15 km/h)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="speed-display">0.0 km/h</div>
+          <div class="stat-label">⚡ Ταχύτητα</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="accuracy-display">--</div>
+          <div class="stat-label">📏 Ακρίβεια</div>
+        </div>
+      </div>
+
+      <div class="mode-container">
+        <span class="mode-label" id="mode-text">Υψηλή Ακρίβεια GPS: ΕΝΕΡΓΗ</span>
+        <label class="switch">
+          <input type="checkbox" id="gps-toggle" checked onchange="updateGpsMode()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-primary" id="track-btn" onclick="toggleTracking()">Έναρξη Εντοπισμού</button>
+        <button class="btn btn-danger" onclick="resetData()">Επανεκκίνηση</button>
+      </div>
+      <div class="bg-status" id="bg-status">Background Mode: Απενεργοποιημένο</div>
+    </div>
+  </div>
+
+  <!-- Αόρατο Audio Element για διατήρηση της εφαρμογής ζωντανής στο παρασκήνιο -->
+  <audio id="silent-audio" loop style="display:none;">
+    <source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==" type="audio/wav">
+  </audio>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let map, canvas, ctx;
+    let walkDistance = 0;
+    let carDistance = 0;
+    let lastPosition = null;
+    let pathHistory = [];
+    let exploredCells = new Set();
+    let watchId = null;
+    let polylineLayer = null;
+    let useHighAccuracy = true;
+    let wakeLock = null;
+
+    const GRID_SIZE = 0.0003; // ~30m
+    const CELL_AREA_KM2 = 0.0009; // 30m x 30m = 0.0009 km²
+
+    // 1. Αυτόματη εγγραφή Inline Service Worker (PWA)
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('fetch', e => {});
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+    }
+
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([37.9838, 23.7275], 16);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      canvas = document.getElementById('fog-canvas');
+      ctx = canvas.getContext('2d');
+
+      polylineLayer = L.polyline([], {
+        color: '#ff1744',
+        weight: 4,
+        opacity: 0.85,
+        smoothFactor: 1
+      }).addTo(map);
+
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      loadSavedData();
+
+      map.on('move', redrawFog);
+      map.on('zoomend', redrawFog);
+    }
+
+    function resizeCanvas() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      redrawFog();
+    }
+
+    // 2. Μηχανισμός Background Keep-Alive
+    async function enableBackgroundKeepAlive() {
+      try {
+        const audio = document.getElementById('silent-audio');
+        await audio.play();
+
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+        document.getElementById('bg-status').innerText = "Background Mode: ΕΝΕΡΓΟ (GPS & Ήχος)";
+        document.getElementById('bg-status').style.color = "#00e676";
+      } catch (err) {
+        document.getElementById('bg-status').innerText = "Background Mode: Μερική υποστήριξη";
+      }
+    }
+
+    function disableBackgroundKeepAlive() {
+      const audio = document.getElementById('silent-audio');
+      audio.pause();
+
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; });
+      }
+      document.getElementById('bg-status').innerText = "Background Mode: Απενεργοποιημένο";
+      document.getElementById('bg-status').style.color = "#888";
+    }
+
+    function updateGpsMode() {
+      useHighAccuracy = document.getElementById('gps-toggle').checked;
+      document.getElementById('mode-text').innerText = useHighAccuracy 
+        ? "Υψηλή Ακρίβεια GPS: ΕΝΕΡΓΗ" 
+        : "Εξοικονόμηση Δικτύου: ΕΝΕΡΓΗ";
+
+      if (watchId !== null) {
+        stopTracking();
+        startTracking();
+      }
+    }
+
+    function getCellKey(lat, lng) {
+      return `${Math.floor(lat / GRID_SIZE)},${Math.floor(lng / GRID_SIZE)}`;
+    }
+
+    function registerExploredPoint(lat, lng) {
+      exploredCells.add(getCellKey(lat, lng));
+    }
+
+    function saveData() {
+      localStorage.setItem('explorer_pathHistory', JSON.stringify(pathHistory));
+      localStorage.setItem('explorer_exploredCells', JSON.stringify(Array.from(exploredCells)));
+      localStorage.setItem('explorer_walkDistance', walkDistance.toString());
+      localStorage.setItem('explorer_carDistance', carDistance.toString());
+    }
+
+    function loadSavedData() {
+      const savedPath = localStorage.getItem('explorer_pathHistory');
+      const savedCells = localStorage.getItem('explorer_exploredCells');
+      const savedWalk = localStorage.getItem('explorer_walkDistance');
+      const savedCar = localStorage.getItem('explorer_carDistance');
+
+      if (savedPath) {
+        pathHistory = JSON.parse(savedPath);
+        polylineLayer.setLatLngs(pathHistory.map(p => [p.lat, p.lng]));
+      }
+
+      if (savedCells) exploredCells = new Set(JSON.parse(savedCells));
+      if (savedWalk) walkDistance = parseFloat(savedWalk);
+      if (savedCar) carDistance = parseFloat(savedCar);
+      
+      updateStatsUI();
+
+      if (pathHistory.length > 0) {
+        const last = pathHistory[pathHistory.length - 1];
+        map.setView([last.lat, last.lng], 16);
+      }
+
+      redrawFog();
+    }
+
+    function updateStatsUI() {
+      document.getElementById('explored-area').innerText = (exploredCells.size * CELL_AREA_KM2).toFixed(3);
+      document.getElementById('walk-distance').innerText = walkDistance.toFixed(2) + ' km';
+      document.getElementById('car-distance').innerText = carDistance.toFixed(2) + ' km';
+    }
+
+    function resetData() {
+      if (confirm('Θέλετε να διαγράψετε όλη την πρόοδο;')) {
+        localStorage.clear();
+        pathHistory = [];
+        exploredCells.clear();
+        walkDistance = 0;
+        carDistance = 0;
+        lastPosition = null;
+        polylineLayer.setLatLngs([]);
+        document.getElementById('speed-display').innerText = '0.0 km/h';
+        document.getElementById('accuracy-display').innerText = '--';
+        updateStatsUI();
+        redrawFog();
+      }
+    }
+
+    function redrawFog() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.globalCompositeOperation = 'destination-out';
+
+      pathHistory.forEach(point => {
+        let containerPoint = map.latLngToContainerPoint(L.latLng(point.lat, point.lng));
+        ctx.beginPath();
+        ctx.arc(containerPoint.x, containerPoint.y, 45, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    function startTracking() {
+      if ('geolocation' in navigator) {
+        enableBackgroundKeepAlive();
+        const btn = document.getElementById('track-btn');
+        
+        watchId = navigator.geolocation.watchPosition(position => {
+          const now = Date.now();
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const accuracy = Math.round(position.coords.accuracy);
+
+          document.getElementById('accuracy-display').innerText = accuracy + 'm';
+
+          if (useHighAccuracy && accuracy > 50) return;
+
+          registerExploredPoint(lat, lng);
+
+          if (lastPosition) {
+            const dist = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
+            const timeDiffHours = (now - lastPosition.time) / 3600000;
+
+            if (dist > 0.004 && timeDiffHours > 0) {
+              let speedKmh = position.coords.speed !== null && position.coords.speed >= 0
+                ? position.coords.speed * 3.6
+                : dist / timeDiffHours;
+
+              document.getElementById('speed-display').innerText = speedKmh.toFixed(1) + ' km/h';
+
+              if (speedKmh >= 15) {
+                carDistance += dist;
+              } else {
+                walkDistance += dist;
+              }
+
+              lastPosition = { lat, lng, time: now };
+              pathHistory.push({ lat, lng });
+              polylineLayer.addLatLng([lat, lng]);
+              saveData();
+            }
+          } else {
+            lastPosition = { lat, lng, time: now };
+            pathHistory.push({ lat, lng });
+            polylineLayer.addLatLng([lat, lng]);
+            saveData();
+          }
+
+          updateStatsUI();
+          map.setView([lat, lng]);
+          redrawFog();
+        }, error => {
+          alert('Σφάλμα εντοπισμού: ' + error.message);
+        }, {
+          enableHighAccuracy: useHighAccuracy,
+          maximumAge: 2000,
+          timeout: 10000
+        });
+
+        btn.innerText = "Παύση Εντοπισμού";
+        btn.style.backgroundColor = "#ff9800";
+      }
+    }
+
+    function stopTracking() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        disableBackgroundKeepAlive();
+        const btn = document.getElementById('track-btn');
+        btn.innerText = "Έναρξη Εντοπισμού";
+        btn.style.backgroundColor = "#2979ff";
+      }
+    }
+
+    function toggleTracking() {
+      if (watchId === null) {
+        startTracking();
+      } else {
+        stopTracking();
+      }
+    }
+
+    window.onload = initMap;
+  </script>
+</body>
+</html>
