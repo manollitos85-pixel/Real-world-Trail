@@ -10,13 +10,13 @@
     body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
     #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
     
-    #map-container { position: relative; flex: 1; width: 100%; height: 45vh; }
+    #map-container { position: relative; flex: 1; width: 100%; height: 40vh; }
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #fog-canvas { pointer-events: none; z-index: 400; }
     
     #stats-panel { 
       background: #1e1e1e; padding: 12px; border-top-left-radius: 16px; border-top-right-radius: 16px; 
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 55vh; max-height: 55vh; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 60vh; max-height: 60vh; 
       overflow-y: scroll !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; 
       display: flex; flex-direction: column; gap: 8px; 
     }
@@ -97,12 +97,22 @@
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-value" id="range-walk">0.00 km</div>
-          <div class="stat-label">🚶‍♂️ Πεζός</div>
+          <div class="stat-label">🚶‍♂️ Πεζός (Εύρος)</div>
         </div>
         <div class="stat-box">
           <div class="stat-value" id="range-car">0.00 km</div>
-          <div class="stat-label">🚗 Όχημα</div>
+          <div class="stat-label">🚗 Όχημα (Εύρος)</div>
         </div>
+      </div>
+
+      <div class="section-title">Γενικα Στατιστικα</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Μήνας)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Όχημα (Μήνας)</div></div>
+        <div class="stat-box"><div class="stat-value" id="walk-year">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Έτος)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-year">0.00 km</div><div class="stat-label">🚗 Όχημα (Έτος)</div></div>
+        <div class="stat-box"><div class="stat-value" id="walk-total">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Σύνολο)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-total">0.00 km</div><div class="stat-label">🚗 Όχημα (Σύνολο)</div></div>
       </div>
 
       <div class="mode-container">
@@ -119,6 +129,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     let map, canvas, ctx, watchId = null, lastPosition = null, pathHistory = [], exploredCells = new Set(), distanceLogs = [], polylineLayer = null, wakeLock = null;
+    let isTrackingActive = false;
     const GRID_SIZE = 0.0003, CELL_AREA_KM2 = 0.0009;
 
     function initMap() {
@@ -133,8 +144,14 @@
       const now = new Date();
       document.getElementById('start-date').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
       document.getElementById('end-date').value = now.toISOString().split('T')[0];
+      
       loadSavedData();
       map.on('move', redrawFog);
+
+      // Αυτόματη συνέχιση καταγραφής αν ήταν ενεργή πριν το minimize/refresh
+      if (isTrackingActive) {
+        startTracking();
+      }
     }
 
     function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; redrawFog(); }
@@ -165,8 +182,15 @@
     }
 
     function toggleTracking() {
-      if (watchId === null) startTracking();
-      else stopTracking();
+      if (watchId === null) {
+        isTrackingActive = true;
+        saveData();
+        startTracking();
+      } else {
+        isTrackingActive = false;
+        saveData();
+        stopTracking();
+      }
     }
 
     function startTracking() {
@@ -180,7 +204,6 @@
              const dist = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
              if (dist > 0.004) {
                const speedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
-               // Κατηγοριοποίηση: < 10 km/h = Πεζός, >= 10 km/h = Όχημα
                const type = speedKmh < 10 ? 'walk' : 'car';
                
                distanceLogs.push({ dist, type, timestamp: Date.now() });
@@ -212,20 +235,54 @@
     function applyDateFilter() { updateStatsUI(); }
 
     function updateStatsUI() {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+
       const startVal = document.getElementById('start-date').value;
       const endVal = document.getElementById('end-date').value;
-      const start = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
-      const end = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
+      const filterStart = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
+      const filterEnd = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
 
-      let walk = 0, car = 0;
+      let rangeWalk = 0, rangeCar = 0;
+      let monthWalk = 0, monthCar = 0;
+      let yearWalk = 0, yearCar = 0;
+      let totalWalk = 0, totalCar = 0;
+
       distanceLogs.forEach(log => {
-        if (log.timestamp >= start && log.timestamp <= end) {
-          if (log.type === 'walk') walk += log.dist;
-          else car += log.dist;
+        const t = log.timestamp;
+        const d = log.dist;
+        const isWalk = log.type === 'walk';
+
+        // Φίλτρο εύρους
+        if (t >= filterStart && t <= filterEnd) {
+          if (isWalk) rangeWalk += d; else rangeCar += d;
         }
+
+        // Μήνας
+        if (t >= startOfMonth) {
+          if (isWalk) monthWalk += d; else monthCar += d;
+        }
+
+        // Έτος
+        if (t >= startOfYear) {
+          if (isWalk) yearWalk += d; else yearCar += d;
+        }
+
+        // Σύνολο
+        if (isWalk) totalWalk += d; else totalCar += d;
       });
-      document.getElementById('range-walk').innerText = walk.toFixed(2) + ' km';
-      document.getElementById('range-car').innerText = car.toFixed(2) + ' km';
+
+      document.getElementById('range-walk').innerText = rangeWalk.toFixed(2) + ' km';
+      document.getElementById('range-car').innerText = rangeCar.toFixed(2) + ' km';
+
+      document.getElementById('walk-month').innerText = monthWalk.toFixed(2) + ' km';
+      document.getElementById('car-month').innerText = monthCar.toFixed(2) + ' km';
+      document.getElementById('walk-year').innerText = yearWalk.toFixed(2) + ' km';
+      document.getElementById('car-year').innerText = yearCar.toFixed(2) + ' km';
+      document.getElementById('walk-total').innerText = totalWalk.toFixed(2) + ' km';
+      document.getElementById('car-total').innerText = totalCar.toFixed(2) + ' km';
+
       document.getElementById('explored-area').innerText = (exploredCells.size * CELL_AREA_KM2).toFixed(3);
     }
     
@@ -235,7 +292,14 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
     
-    function saveData() { localStorage.setItem('data', JSON.stringify({pathHistory, exploredCells: Array.from(exploredCells), distanceLogs})); }
+    function saveData() { 
+      localStorage.setItem('data', JSON.stringify({
+        pathHistory, 
+        exploredCells: Array.from(exploredCells), 
+        distanceLogs,
+        isTrackingActive
+      })); 
+    }
     
     function loadSavedData() { 
         const d = JSON.parse(localStorage.getItem('data')); 
@@ -243,6 +307,7 @@
           pathHistory = d.pathHistory || []; 
           exploredCells = new Set(d.exploredCells || []); 
           distanceLogs = d.distanceLogs || []; 
+          isTrackingActive = d.isTrackingActive || false;
           if(polylineLayer) polylineLayer.setLatLngs(pathHistory.map(p => [p.lat, p.lng]));
         }
         updateStatsUI();
