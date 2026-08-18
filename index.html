@@ -9,30 +9,40 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
     #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
-    #map-container { position: relative; flex: 1; width: 100%; }
+    #map-container { position: relative; flex: 1; width: 100%; min-height: 30vh; }
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #fog-canvas { pointer-events: none; z-index: 400; }
     
     #stats-panel { 
       background: #1e1e1e; 
-      padding: 12px; 
+      padding: 10px 12px; 
       border-top-left-radius: 16px; 
       border-top-right-radius: 16px; 
       box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
       z-index: 1000; 
       display: flex; 
       flex-direction: column; 
-      gap: 8px; 
+      gap: 6px; 
+      max-height: 65vh; 
+      overflow-y: auto; 
     }
 
     .total-banner {
       background: #2979ff;
       color: white;
       text-align: center;
-      padding: 8px;
+      padding: 6px;
       border-radius: 8px;
       font-weight: bold;
-      font-size: 15px;
+      font-size: 13px;
+    }
+
+    .section-title {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      font-weight: bold;
+      margin-top: 2px;
     }
 
     .stats-grid { 
@@ -40,29 +50,78 @@
       grid-template-columns: 1fr 1fr; 
       gap: 6px; 
       background: #2a2a2a; 
-      padding: 8px; 
+      padding: 6px; 
       border-radius: 10px; 
     }
     
-    .stat-box { text-align: center; background: #1e1e1e; padding: 6px; border-radius: 6px; }
-    .stat-value { font-size: 15px; font-weight: bold; color: #00e676; }
-    .stat-label { font-size: 10px; color: #aaaaaa; text-transform: uppercase; margin-top: 2px; }
+    .stat-box { text-align: center; background: #1e1e1e; padding: 4px 6px; border-radius: 6px; }
+    .stat-value { font-size: 13px; font-weight: bold; color: #00e676; }
+    .stat-label { font-size: 9px; color: #aaaaaa; text-transform: uppercase; margin-top: 1px; }
 
-    .mode-container { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 6px 12px; border-radius: 8px; }
-    .mode-label { font-size: 12px; font-weight: bold; color: #ddd; }
-    .switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+    /* Φίλτρο Ημερομηνιών */
+    .date-filter-container {
+      background: #2a2a2a;
+      padding: 8px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .date-inputs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .date-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .date-field label {
+      font-size: 9px;
+      color: #aaa;
+      text-transform: uppercase;
+    }
+
+    .date-field input {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 4px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .filter-btn {
+      background: #00e676;
+      color: #121212;
+      border: none;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .mode-container { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 6px 10px; border-radius: 8px; }
+    .mode-label { font-size: 11px; font-weight: bold; color: #ddd; }
+    .switch { position: relative; display: inline-block; width: 36px; height: 18px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .3s; border-radius: 20px; }
-    .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
     input:checked + .slider { background-color: #00e676; }
-    input:checked + .slider:before { transform: translateX(18px); }
+    input:checked + .slider:before { transform: translateX(16px); }
 
-    .button-group { display: flex; gap: 8px; }
-    .btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .button-group { display: flex; gap: 6px; }
+    .btn { flex: 1; padding: 8px; border: none; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
     .btn-primary { background-color: #2979ff; color: white; }
     .btn-danger { background-color: #ff5252; color: white; }
 
-    .bg-status { font-size: 10px; text-align: center; color: #888; }
+    .bg-status { font-size: 9px; text-align: center; color: #888; }
   </style>
 </head>
 <body>
@@ -78,15 +137,65 @@
         Ξεκλειδωμένη Περιοχή: <span id="explored-area">0.000</span> km²
       </div>
 
+      <!-- Φίλτρο Ημερομηνιών -->
+      <div class="section-title">Επιλογη Περιοδου</div>
+      <div class="date-filter-container">
+        <div class="date-inputs">
+          <div class="date-field">
+            <label>Από:</label>
+            <input type="date" id="start-date">
+          </div>
+          <div class="date-field">
+            <label>Εώς:</label>
+            <input type="date" id="end-date">
+          </div>
+        </div>
+        <button class="filter-btn" onclick="applyDateFilter()">Εφαρμογή Φίλτρου</button>
+      </div>
+
+      <!-- Αποτελέσματα Επιλεγμένου Εύρους -->
       <div class="stats-grid">
         <div class="stat-box">
+          <div class="stat-value" id="range-walk">0.00 km</div>
+          <div class="stat-label">🚶‍♂️ Πεζή (Εύρος)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="range-car">0.00 km</div>
+          <div class="stat-label">🚗 Όχημα (Εύρος)</div>
+        </div>
+      </div>
+
+      <!-- Συνολικά & Περίοδοι -->
+      <div class="section-title">Στατιστικα (Μηνας / Ετος / Συνολο)</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-value" id="walk-month">0.00 km</div>
+          <div class="stat-label">🚶‍♂️ Μήνας</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="car-month">0.00 km</div>
+          <div class="stat-label">🚗 Μήνας</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="walk-year">0.00 km</div>
+          <div class="stat-label">🚶‍♂️ Έτος</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="car-year">0.00 km</div>
+          <div class="stat-label">🚗 Έτος</div>
+        </div>
+        <div class="stat-box">
           <div class="stat-value" id="walk-distance">0.00 km</div>
-          <div class="stat-label">🚶‍♂️ Πεζή (&lt;15 km/h)</div>
+          <div class="stat-label">🚶‍♂️ Σύνολο</div>
         </div>
         <div class="stat-box">
           <div class="stat-value" id="car-distance">0.00 km</div>
-          <div class="stat-label">🚗 Με Όχημα (&ge;15 km/h)</div>
+          <div class="stat-label">🚗 Σύνολο</div>
         </div>
+      </div>
+
+      <!-- Τρέχουσα Κατάσταση -->
+      <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-value" id="speed-display">0.0 km/h</div>
           <div class="stat-label">⚡ Ταχύτητα</div>
@@ -113,7 +222,6 @@
     </div>
   </div>
 
-  <!-- Αόρατο Audio Element για διατήρηση της εφαρμογής ζωντανής στο παρασκήνιο -->
   <audio id="silent-audio" loop style="display:none;">
     <source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==" type="audio/wav">
   </audio>
@@ -121,8 +229,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     let map, canvas, ctx;
-    let walkDistance = 0;
-    let carDistance = 0;
+    let distanceLogs = [];
     let lastPosition = null;
     let pathHistory = [];
     let exploredCells = new Set();
@@ -131,10 +238,9 @@
     let useHighAccuracy = true;
     let wakeLock = null;
 
-    const GRID_SIZE = 0.0003; // ~30m
-    const CELL_AREA_KM2 = 0.0009; // 30m x 30m = 0.0009 km²
+    const GRID_SIZE = 0.0003;
+    const CELL_AREA_KM2 = 0.0009;
 
-    // 1. Αυτόματη εγγραφή Inline Service Worker (PWA)
     if ('serviceWorker' in navigator) {
       const swCode = `
         self.addEventListener('install', e => self.skipWaiting());
@@ -166,6 +272,13 @@
       resizeCanvas();
       window.addEventListener('resize', resizeCanvas);
 
+      // Ορισμός προεπιλεγμένων ημερομηνιών (Αρχή μήνα - Σήμερα)
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const today = now.toISOString().split('T')[0];
+      document.getElementById('start-date').value = firstDay;
+      document.getElementById('end-date').value = today;
+
       loadSavedData();
 
       map.on('move', redrawFog);
@@ -178,7 +291,6 @@
       redrawFog();
     }
 
-    // 2. Μηχανισμός Background Keep-Alive
     async function enableBackgroundKeepAlive() {
       try {
         const audio = document.getElementById('silent-audio');
@@ -228,15 +340,13 @@
     function saveData() {
       localStorage.setItem('explorer_pathHistory', JSON.stringify(pathHistory));
       localStorage.setItem('explorer_exploredCells', JSON.stringify(Array.from(exploredCells)));
-      localStorage.setItem('explorer_walkDistance', walkDistance.toString());
-      localStorage.setItem('explorer_carDistance', carDistance.toString());
+      localStorage.setItem('explorer_distanceLogs', JSON.stringify(distanceLogs));
     }
 
     function loadSavedData() {
       const savedPath = localStorage.getItem('explorer_pathHistory');
       const savedCells = localStorage.getItem('explorer_exploredCells');
-      const savedWalk = localStorage.getItem('explorer_walkDistance');
-      const savedCar = localStorage.getItem('explorer_carDistance');
+      const savedLogs = localStorage.getItem('explorer_distanceLogs');
 
       if (savedPath) {
         pathHistory = JSON.parse(savedPath);
@@ -244,8 +354,7 @@
       }
 
       if (savedCells) exploredCells = new Set(JSON.parse(savedCells));
-      if (savedWalk) walkDistance = parseFloat(savedWalk);
-      if (savedCar) carDistance = parseFloat(savedCar);
+      if (savedLogs) distanceLogs = JSON.parse(savedLogs);
       
       updateStatsUI();
 
@@ -257,10 +366,59 @@
       redrawFog();
     }
 
+    function applyDateFilter() {
+      updateStatsUI();
+    }
+
     function updateStatsUI() {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      // Λήψη επιλεγμένων ημερομηνιών
+      const startDateVal = document.getElementById('start-date').value;
+      const endDateVal = document.getElementById('end-date').value;
+
+      const startTime = startDateVal ? new Date(startDateVal + "T00:00:00").getTime() : 0;
+      const endTime = endDateVal ? new Date(endDateVal + "T23:59:59").getTime() : Infinity;
+
+      let totalWalk = 0, totalCar = 0;
+      let monthWalk = 0, monthCar = 0;
+      let yearWalk = 0, yearCar = 0;
+      let rangeWalk = 0, rangeCar = 0;
+
+      distanceLogs.forEach(log => {
+        const logDate = new Date(log.timestamp);
+        const logTime = log.timestamp;
+
+        const isThisYear = logDate.getFullYear() === currentYear;
+        const isThisMonth = isThisYear && logDate.getMonth() === currentMonth;
+        const isInRange = logTime >= startTime && logTime <= endTime;
+
+        if (log.type === 'walk') {
+          totalWalk += log.dist;
+          if (isThisYear) yearWalk += log.dist;
+          if (isThisMonth) monthWalk += log.dist;
+          if (isInRange) rangeWalk += log.dist;
+        } else if (log.type === 'car') {
+          totalCar += log.dist;
+          if (isThisYear) yearCar += log.dist;
+          if (isThisMonth) monthCar += log.dist;
+          if (isInRange) rangeCar += log.dist;
+        }
+      });
+
       document.getElementById('explored-area').innerText = (exploredCells.size * CELL_AREA_KM2).toFixed(3);
-      document.getElementById('walk-distance').innerText = walkDistance.toFixed(2) + ' km';
-      document.getElementById('car-distance').innerText = carDistance.toFixed(2) + ' km';
+      
+      document.getElementById('range-walk').innerText = rangeWalk.toFixed(2) + ' km';
+      document.getElementById('range-car').innerText = rangeCar.toFixed(2) + ' km';
+
+      document.getElementById('walk-distance').innerText = totalWalk.toFixed(2) + ' km';
+      document.getElementById('car-distance').innerText = totalCar.toFixed(2) + ' km';
+      document.getElementById('walk-month').innerText = monthWalk.toFixed(2) + ' km';
+      document.getElementById('car-month').innerText = monthCar.toFixed(2) + ' km';
+      document.getElementById('walk-year').innerText = yearWalk.toFixed(2) + ' km';
+      document.getElementById('car-year').innerText = yearCar.toFixed(2) + ' km';
     }
 
     function resetData() {
@@ -268,8 +426,7 @@
         localStorage.clear();
         pathHistory = [];
         exploredCells.clear();
-        walkDistance = 0;
-        carDistance = 0;
+        distanceLogs = [];
         lastPosition = null;
         polylineLayer.setLatLngs([]);
         document.getElementById('speed-display').innerText = '0.0 km/h';
@@ -332,11 +489,8 @@
 
               document.getElementById('speed-display').innerText = speedKmh.toFixed(1) + ' km/h';
 
-              if (speedKmh >= 15) {
-                carDistance += dist;
-              } else {
-                walkDistance += dist;
-              }
+              const moveType = speedKmh >= 15 ? 'car' : 'walk';
+              distanceLogs.push({ dist: dist, type: moveType, timestamp: now });
 
               lastPosition = { lat, lng, time: now };
               pathHistory.push({ lat, lng });
