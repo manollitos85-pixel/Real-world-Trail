@@ -6,14 +6,36 @@
   <title>Map Explorer Pro</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    /* ... [Τα στυλ παραμένουν ίδια για λόγους ταχύτητας] ... */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
     #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
-    #map-container { position: relative; flex: 1; width: 100%; height: 40vh; }
+    
+    #map-container { position: relative; flex: 1; width: 100%; height: 50vh; }
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    #stats-panel { background: #1e1e1e; padding: 12px; height: 60vh; overflow-y: auto; }
-    .btn { padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 5px; }
+    #fog-canvas { pointer-events: none; z-index: 400; }
+    
+    #stats-panel { 
+      background: #1e1e1e; padding: 12px; border-top-left-radius: 16px; border-top-right-radius: 16px; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 50vh; max-height: 50vh; 
+      overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; 
+    }
+
+    .total-banner { background: #2979ff; color: white; text-align: center; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 13px; }
+    .section-title { font-size: 9px; color: #888; text-transform: uppercase; font-weight: bold; margin-top: 2px; }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #2a2a2a; padding: 8px; border-radius: 8px; }
+    .stat-box { text-align: center; background: #1e1e1e; padding: 6px; border-radius: 6px; }
+    .stat-value { font-size: 13px; font-weight: bold; color: #00e676; }
+    .stat-label { font-size: 9px; color: #aaaaaa; text-transform: uppercase; margin-top: 2px; }
+
+    .button-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn { padding: 10px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; min-width: 40%; text-align: center; }
+    .btn-primary { background-color: #2979ff; color: white; }
+    .btn-center { background-color: #9c27b0; color: white; }
+    .btn-backup { background-color: #00897b; color: white; }
+    .btn-danger { background-color: #ff5252; color: white; }
+    
+    .bg-status { font-size: 10px; text-align: center; color: #ff9800; margin-top: 4px; padding-bottom: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -25,75 +47,199 @@
     </div>
 
     <div id="stats-panel">
-      <button class="btn" style="background:#2979ff; color:white;" id="track-btn" onclick="toggleTracking()">Έναρξη Καταγραφής</button>
-      <div id="status-box" style="font-size:10px; color:#888; text-align:center; margin: 10px 0;">Κατάσταση: Αναμονή...</div>
+      <div class="total-banner">
+        Ξεκλειδωμένη Περιοχή: <span id="explored-area">0.000</span> km²
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-primary" id="track-btn" onclick="toggleTracking()">Έναρξη</button>
+        <button class="btn btn-center" onclick="centerToUser()">🎯 Θέση</button>
+        <button class="btn btn-backup" onclick="exportData()">📥 Backup</button>
+        <button class="btn btn-danger" onclick="resetData()">Reset</button>
+      </div>
+
+      <div class="section-title">Στατιστικά Περιόδου (Μήνας)</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Όχημα</div></div>
+      </div>
+      
+      <div class="bg-status" id="bg-status">Αναμονή για έναρξη...</div>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    let map, canvas, ctx, watchId = null, lastPosition = null, pathHistory = [], isTrackingActive = false;
+    let map, canvas, ctx, watchId = null, lastPosition = null, pathHistory = [], exploredCells = new Set(), distanceLogs = [], polylineLayer = null, isTrackingActive = false;
+    const GRID_SIZE = 0.0003, CELL_AREA_KM2 = 0.0009;
 
     function initMap() {
-      // Φόρτωση τελευταίας θέσης από το ιστορικό ή default
+      // Ανάκτηση τελευταίων δεδομένων από τη μνήμη
       const savedData = JSON.parse(localStorage.getItem('data') || '{}');
-      const startPos = (savedData.pathHistory && savedData.pathHistory.length > 0) 
-                       ? [savedData.pathHistory[savedData.pathHistory.length-1].lat, savedData.pathHistory[savedData.pathHistory.length-1].lng] 
-                       : [37.9838, 23.7275];
+      
+      // Αν υπάρχει αποθηκευμένη θέση, ξεκινάει εκεί. Διαφορετικά ξεκινάει από Πειραιά.
+      let startPos = [37.9429, 23.6469];
+      if (savedData.pathHistory && savedData.pathHistory.length > 0) {
+        const last = savedData.pathHistory[savedData.pathHistory.length - 1];
+        startPos = [last.lat, last.lng];
+      }
 
-      map = L.map('map', { zoomControl: false }).setView(startPos, 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      map = L.map('map', { zoomControl: false }).setView(startPos, 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
       
       canvas = document.getElementById('fog-canvas');
       ctx = canvas.getContext('2d');
+      polylineLayer = L.polyline([], { color: '#ff1744', weight: 4, opacity: 0.85 }).addTo(map);
+      
+      window.addEventListener('resize', () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; redrawFog(); });
+      canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+      
       loadSavedData();
+      map.on('move', redrawFog);
     }
 
     function toggleTracking() {
-      if (watchId === null) {
-        isTrackingActive = true;
-        startTracking();
-      } else {
-        isTrackingActive = false;
-        stopTracking();
+      if (watchId === null) { 
+        isTrackingActive = true; 
+        startTracking(); 
+      } else { 
+        isTrackingActive = false; 
+        stopTracking(); 
       }
-      localStorage.setItem('trackingState', isTrackingActive);
+      saveData();
     }
 
     function startTracking() {
       if ('geolocation' in navigator) {
-        // enableHighAccuracy: false σημαίνει χρήση Wi-Fi/Cell towers (Πιο γρήγορο, λιγότερη ακρίβεια αλλά λειτουργεί παντού)
+        document.getElementById('track-btn').innerText = "Παύση";
+        document.getElementById('track-btn').style.backgroundColor = "#ff9800";
+        
         watchId = navigator.geolocation.watchPosition(
           pos => {
             const lat = pos.coords.latitude; 
             const lng = pos.coords.longitude;
             lastPosition = { lat, lng };
+            
+            exploredCells.add(`${Math.floor(lat / GRID_SIZE)},${Math.floor(lng / GRID_SIZE)}`);
+            pathHistory.push({ lat, lng });
+            polylineLayer.addLatLng([lat, lng]);
             map.setView([lat, lng]);
-            document.getElementById('status-box').innerText = "Τοποθεσία: Ενεργή (Network/GPS)";
-            document.getElementById('status-box').style.color = "#00e676";
-            // ... (εδώ προσθέτεις το logic για pathHistory)
+            
+            redrawFog();
+            updateStatsUI();
+            saveData();
+
+            document.getElementById('bg-status').innerText = "Τοποθεσία: Ενεργή";
+            document.getElementById('bg-status').style.color = "#00e676";
           },
           err => {
-            document.getElementById('status-box').innerText = "Σφάλμα GPS: Χρήση τελευταίας θέσης";
-            document.getElementById('status-box').style.color = "#ff5252";
+            console.error("Location error:", err);
+            document.getElementById('bg-status').innerText = "GPS Κλειστό / Χρήση τελευταίας θέσης";
+            document.getElementById('bg-status').style.color = "#ff5252";
           },
+          // enableHighAccuracy: false επιτρέπει εντοπισμό και μέσω Wi-Fi/Κεραιών
           { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
         );
+      } else {
+        alert("Ο εντοπισμός τοποθεσίας δεν υποστηρίζεται στη συσκευή σας.");
       }
     }
 
     function stopTracking() {
-        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-        watchId = null;
+      if (watchId !== null) { 
+        navigator.geolocation.clearWatch(watchId); 
+        watchId = null; 
+      }
+      document.getElementById('track-btn').innerText = "Έναρξη";
+      document.getElementById('track-btn').style.backgroundColor = "#2979ff";
+      document.getElementById('bg-status').innerText = "Καταγραφή: Σε παύση";
+      document.getElementById('bg-status').style.color = "#ff9800";
     }
 
-    function loadSavedData() {
-        // Επαναφέρει την τελευταία γνωστή θέση χωρίς να χρειάζεται GPS
-        const d = JSON.parse(localStorage.getItem('data'));
-        if(d && d.pathHistory.length > 0) {
-            const last = d.pathHistory[d.pathHistory.length-1];
-            map.setView([last.lat, last.lng], 16);
+    function centerToUser() {
+      if (lastPosition) {
+        map.setView([lastPosition.lat, lastPosition.lng], 17);
+      } else if (pathHistory.length > 0) {
+        const last = pathHistory[pathHistory.length - 1];
+        map.setView([last.lat, last.lng], 17);
+      } else {
+        alert("Δεν βρέθηκε καταγεγραμμένη θέση.");
+      }
+    }
+
+    function updateStatsUI() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        let walk = 0, car = 0;
+        
+        distanceLogs.forEach(log => {
+            if(log.timestamp >= startOfMonth) {
+                if(log.type === 'walk') walk += log.dist; else car += log.dist;
+            }
+        });
+        
+        document.getElementById('walk-month').innerText = walk.toFixed(2) + ' km';
+        document.getElementById('car-month').innerText = car.toFixed(2) + ' km';
+        document.getElementById('explored-area').innerText = (exploredCells.size * CELL_AREA_KM2).toFixed(3);
+    }
+
+    function saveData() { 
+      localStorage.setItem('data', JSON.stringify({
+        pathHistory, 
+        exploredCells: Array.from(exploredCells), 
+        distanceLogs, 
+        isTrackingActive
+      })); 
+    }
+    
+    function loadSavedData() { 
+        const d = JSON.parse(localStorage.getItem('data')); 
+        if(d) { 
+          pathHistory = d.pathHistory || []; 
+          exploredCells = new Set(d.exploredCells || []); 
+          distanceLogs = d.distanceLogs || []; 
+          isTrackingActive = d.isTrackingActive || false;
+          
+          if(polylineLayer && pathHistory.length > 0) {
+            polylineLayer.setLatLngs(pathHistory.map(p => [p.lat, p.lng]));
+          }
         }
+        updateStatsUI();
+        redrawFog();
+    }
+
+    function redrawFog() { 
+        if(!ctx) return;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; 
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'destination-out';
+        
+        pathHistory.forEach(p => { 
+            const pt = map.latLngToContainerPoint([p.lat, p.lng]);
+            ctx.beginPath(); 
+            ctx.arc(pt.x, pt.y, 40, 0, Math.PI * 2); 
+            ctx.fill();
+        });
+        
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function exportData() {
+      const dataStr = localStorage.getItem('data');
+      if (!dataStr) { alert('Δεν υπάρχουν αποθηκευμένα δεδομένα!'); return; }
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; 
+      a.download = 'map_backup.json'; 
+      a.click();
+    }
+
+    function resetData() { 
+      if(confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε όλα τα δεδομένα διαδρομών;')) { 
+        localStorage.clear(); 
+        location.reload(); 
+      } 
     }
 
     window.onload = initMap;
