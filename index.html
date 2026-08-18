@@ -14,22 +14,11 @@
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #fog-canvas { pointer-events: none; z-index: 400; }
     
-    /* Διόρθωση Scrolling για Samsung Internet & Mobile Chrome */
     #stats-panel { 
-      background: #1e1e1e; 
-      padding: 12px; 
-      border-top-left-radius: 16px; 
-      border-top-right-radius: 16px; 
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
-      z-index: 1000; 
-      height: 55vh; 
-      max-height: 55vh; 
-      overflow-y: scroll !important; 
-      -webkit-overflow-scrolling: touch !important; 
-      touch-action: pan-y !important; 
-      display: flex; 
-      flex-direction: column; 
-      gap: 8px; 
+      background: #1e1e1e; padding: 12px; border-top-left-radius: 16px; border-top-right-radius: 16px; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 55vh; max-height: 55vh; 
+      overflow-y: scroll !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; 
+      display: flex; flex-direction: column; gap: 8px; 
     }
 
     .total-banner { background: #2979ff; color: white; text-align: center; padding: 6px; border-radius: 8px; font-weight: bold; font-size: 12px; }
@@ -47,10 +36,12 @@
     .date-field input { background: #1e1e1e; border: 1px solid #444; color: #fff; padding: 4px; border-radius: 4px; font-size: 10px; }
     .filter-btn { background: #00e676; color: #121212; border: none; padding: 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
 
-    .button-group { display: flex; gap: 4px; }
-    .btn { padding: 8px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; }
+    .button-group { display: flex; gap: 4px; flex-wrap: wrap; }
+    .btn { padding: 8px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; min-width: 30%; }
     .btn-primary { background-color: #2979ff; color: white; }
     .btn-center { background-color: #9c27b0; color: white; }
+    .btn-backup { background-color: #00897b; color: white; }
+    .btn-import { background-color: #ffb300; color: #121212; }
     .btn-danger { background-color: #ff5252; color: white; }
 
     .mode-container { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 6px; border-radius: 6px; }
@@ -81,8 +72,11 @@
       <div class="button-group">
         <button class="btn btn-primary" id="track-btn" onclick="toggleTracking()">Έναρξη</button>
         <button class="btn btn-center" onclick="centerToUser()">🎯 Θέση</button>
+        <button class="btn btn-backup" onclick="exportData()">📥 Backup</button>
+        <button class="btn btn-import" onclick="triggerImport()">📤 Εισαγωγή</button>
         <button class="btn btn-danger" onclick="resetData()">Reset</button>
       </div>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
 
       <div class="section-title">Επιλογη Περιοδου</div>
       <div class="date-filter-container">
@@ -99,31 +93,22 @@
         <button class="filter-btn" onclick="applyDateFilter()">Εφαρμογή Φίλτρου</button>
       </div>
 
+      <div class="section-title">Στατιστικα Περιοδου</div>
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-value" id="range-walk">0.00 km</div>
-          <div class="stat-label">🚶‍♂️ Πεζός (Εύρος)</div>
+          <div class="stat-label">🚶‍♂️ Πεζός</div>
         </div>
         <div class="stat-box">
           <div class="stat-value" id="range-car">0.00 km</div>
-          <div class="stat-label">🚗 Όχημα (Εύρος)</div>
+          <div class="stat-label">🚗 Όχημα</div>
         </div>
-      </div>
-
-      <div class="section-title">Στατιστικα</div>
-      <div class="stats-grid">
-        <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Μήνας)</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Όχημα (Μήνας)</div></div>
-        <div class="stat-box"><div class="stat-value" id="walk-year">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Έτος)</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-year">0.00 km</div><div class="stat-label">🚗 Όχημα (Έτος)</div></div>
-        <div class="stat-box"><div class="stat-value" id="walk-distance">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Σύνολο)</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-distance">0.00 km</div><div class="stat-label">🚗 Όχημα (Σύνολο)</div></div>
       </div>
 
       <div class="mode-container">
         <span class="mode-label">GPS Ακρίβεια</span>
         <label class="switch">
-          <input type="checkbox" id="gps-toggle" checked onchange="updateGpsMode()">
+          <input type="checkbox" id="gps-toggle" checked>
           <span class="slider"></span>
         </label>
       </div>
@@ -195,7 +180,9 @@
              const dist = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
              if (dist > 0.004) {
                const speedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
-               const type = speedKmh >= 15 ? 'car' : 'walk';
+               // Κατηγοριοποίηση: < 10 km/h = Πεζός, >= 10 km/h = Όχημα
+               const type = speedKmh < 10 ? 'walk' : 'car';
+               
                distanceLogs.push({ dist, type, timestamp: Date.now() });
                pathHistory.push({ lat, lng });
                polylineLayer.addLatLng([lat, lng]);
@@ -249,13 +236,63 @@
     }
     
     function saveData() { localStorage.setItem('data', JSON.stringify({pathHistory, exploredCells: Array.from(exploredCells), distanceLogs})); }
+    
     function loadSavedData() { 
         const d = JSON.parse(localStorage.getItem('data')); 
-        if(d) { pathHistory = d.pathHistory || []; exploredCells = new Set(d.exploredCells || []); distanceLogs = d.distanceLogs || []; }
+        if(d) { 
+          pathHistory = d.pathHistory || []; 
+          exploredCells = new Set(d.exploredCells || []); 
+          distanceLogs = d.distanceLogs || []; 
+          if(polylineLayer) polylineLayer.setLatLngs(pathHistory.map(p => [p.lat, p.lng]));
+        }
         updateStatsUI();
+        redrawFog();
     }
+
+    function exportData() {
+      const dataStr = localStorage.getItem('data');
+      if (!dataStr) { alert('Δεν υπάρχουν δεδομένα για αποθήκευση!'); return; }
+      
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().split('T')[0];
+      a.href = url;
+      a.download = `map-data-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function triggerImport() { document.getElementById('import-file').click(); }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.pathHistory && parsed.exploredCells && parsed.distanceLogs) {
+            localStorage.setItem('data', JSON.stringify(parsed));
+            loadSavedData();
+            alert('Η επαναφορά δεδομένων έγινε με επιτυχία!');
+          } else {
+            alert('Μη έγκυρο αρχείο backup.');
+          }
+        } catch (err) {
+          alert('Σφάλμα κατά την ανάγνωση του αρχείου.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
     function resetData() { if(confirm('Επανεκκίνηση όλων;')) { localStorage.clear(); location.reload(); } }
+    
     function redrawFog() { 
+        if(!ctx) return;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalCompositeOperation = 'destination-out';
         pathHistory.forEach(p => { 
