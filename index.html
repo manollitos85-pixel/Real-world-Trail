@@ -37,10 +37,11 @@
     .btn-clear-date { background: #555; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; align-self: flex-end; }
 
     .button-group { display: flex; gap: 6px; flex-wrap: wrap; }
-    .btn { padding: 10px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; min-width: 40%; text-align: center; }
+    .btn { padding: 8px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; min-width: 30%; text-align: center; }
     .btn-primary { background-color: #2979ff; color: white; }
     .btn-center { background-color: #9c27b0; color: white; }
-    .btn-backup { background-color: #00897b; color: white; }
+    .btn-export { background-color: #00897b; color: white; }
+    .btn-import { background-color: #ff9800; color: white; }
     .btn-danger { background-color: #ff5252; color: white; }
     
     .bg-status { font-size: 10px; text-align: center; color: #ff9800; margin-top: 2px; padding-bottom: 8px; font-weight: bold; }
@@ -66,9 +67,13 @@
       <div class="button-group">
         <button class="btn btn-primary" id="track-btn" onclick="toggleTracking()">Έναρξη</button>
         <button class="btn btn-center" onclick="centerToUser()">🎯 Θέση</button>
-        <button class="btn btn-backup" onclick="exportData()">📥 Backup</button>
+        <button class="btn btn-export" onclick="exportData()">📥 Export</button>
+        <button class="btn btn-import" onclick="triggerImport()">📤 Import</button>
         <button class="btn btn-danger" onclick="resetData()">Reset</button>
       </div>
+
+      <!-- Κρυφό input για επιλογή αρχείου -->
+      <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importData(event)">
 
       <!-- Σημερινά -->
       <div class="section-title">Σημερινά (Ημερήσιο)</div>
@@ -255,12 +260,10 @@
         let walkTotal = 0, carTotal = 0;
         
         distanceLogs.forEach(log => {
-            // Υπολογισμός Σημερινών
             if (log.timestamp >= startOfToday) {
               if (log.type === 'walk') walkToday += log.dist; else carToday += log.dist;
             }
 
-            // Υπολογισμός Εύρους
             if (customFrom || customTo) {
               const matchesFrom = customFrom ? log.timestamp >= customFrom : true;
               const matchesTo = customTo ? log.timestamp <= customTo : true;
@@ -269,7 +272,6 @@
               }
             }
 
-            // Υπολογισμοί Προεπιλεγμένων Διαστημάτων
             if (log.type === 'walk') {
               walkTotal += log.dist;
               if (log.timestamp >= startOfYear) walkYear += log.dist;
@@ -296,7 +298,6 @@
         document.getElementById('walk-total').innerText = walkTotal.toFixed(2) + ' km';
         document.getElementById('car-total').innerText = carTotal.toFixed(2) + ' km';
 
-        // Συνολική απόσταση
         const grandTotal = walkTotal + carTotal;
         document.getElementById('grand-total-dist').innerText = grandTotal.toFixed(2);
 
@@ -353,6 +354,37 @@
       a.href = url; 
       a.download = 'map_backup.json'; 
       a.click();
+    }
+
+    function triggerImport() {
+      document.getElementById('import-file').click();
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (importedData.pathHistory && importedData.exploredCells) {
+            localStorage.setItem('data', JSON.stringify(importedData));
+            loadSavedData();
+            
+            if (pathHistory.length > 0) {
+              const last = pathHistory[pathHistory.length - 1];
+              map.setView([last.lat, last.lng], 15);
+            }
+            alert('Η εισαγωγή των δεδομένων ολοκληρώθηκε επιτυχώς!');
+          } else {
+            alert('Μη έγκυρο αρχείο backup.');
+          }
+        } catch (err) {
+          alert('Σφάλμα κατά την ανάγνωση του αρχείου.');
+        }
+      };
+      reader.readAsText(file);
     }
 
     function resetData() { 
