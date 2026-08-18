@@ -10,23 +10,31 @@
     body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
     #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
     
-    #map-container { position: relative; flex: 1; width: 100%; height: 50vh; }
+    #map-container { position: relative; flex: 1; width: 100%; height: 35vh; }
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #fog-canvas { pointer-events: none; z-index: 400; }
     
     #stats-panel { 
       background: #1e1e1e; padding: 12px; border-top-left-radius: 16px; border-top-right-radius: 16px; 
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 50vh; max-height: 50vh; 
-      overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5); z-index: 1000; height: 65vh; max-height: 65vh; 
+      overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 8px; 
     }
 
     .total-banner { background: #2979ff; color: white; text-align: center; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 13px; }
-    .section-title { font-size: 9px; color: #888; text-transform: uppercase; font-weight: bold; margin-top: 2px; }
+    .grand-total-banner { background: #00e676; color: #121212; text-align: center; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 14px; }
+    .section-title { font-size: 9px; color: #888; text-transform: uppercase; font-weight: bold; margin-top: 4px; }
 
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #2a2a2a; padding: 8px; border-radius: 8px; }
     .stat-box { text-align: center; background: #1e1e1e; padding: 6px; border-radius: 6px; }
-    .stat-value { font-size: 13px; font-weight: bold; color: #00e676; }
-    .stat-label { font-size: 9px; color: #aaaaaa; text-transform: uppercase; margin-top: 2px; }
+    .stat-value { font-size: 12px; font-weight: bold; color: #00e676; }
+    .stat-label { font-size: 8px; color: #aaaaaa; text-transform: uppercase; margin-top: 2px; }
+
+    .date-filter-container { background: #2a2a2a; padding: 8px; border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .date-inputs { display: flex; gap: 6px; align-items: center; }
+    .date-field { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .date-field label { font-size: 8px; color: #aaa; text-transform: uppercase; }
+    .date-field input { background: #1e1e1e; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 4px; font-size: 11px; width: 100%; }
+    .btn-clear-date { background: #555; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; align-self: flex-end; }
 
     .button-group { display: flex; gap: 6px; flex-wrap: wrap; }
     .btn { padding: 10px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; min-width: 40%; text-align: center; }
@@ -35,7 +43,7 @@
     .btn-backup { background-color: #00897b; color: white; }
     .btn-danger { background-color: #ff5252; color: white; }
     
-    .bg-status { font-size: 10px; text-align: center; color: #ff9800; margin-top: 4px; padding-bottom: 10px; font-weight: bold; }
+    .bg-status { font-size: 10px; text-align: center; color: #ff9800; margin-top: 2px; padding-bottom: 8px; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -51,6 +59,10 @@
         Ξεκλειδωμένη Περιοχή: <span id="explored-area">0.000</span> km²
       </div>
 
+      <div class="grand-total-banner">
+        Συνολική Απόσταση: <span id="grand-total-dist">0.00</span> km
+      </div>
+
       <div class="button-group">
         <button class="btn btn-primary" id="track-btn" onclick="toggleTracking()">Έναρξη</button>
         <button class="btn btn-center" onclick="centerToUser()">🎯 Θέση</button>
@@ -58,10 +70,49 @@
         <button class="btn btn-danger" onclick="resetData()">Reset</button>
       </div>
 
-      <div class="section-title">Στατιστικά Περιόδου (Μήνας)</div>
+      <!-- Σημερινά -->
+      <div class="section-title">Σημερινά (Ημερήσιο)</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-today">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-today">0.00 km</div><div class="stat-label">🚗 Όχημα</div></div>
+      </div>
+
+      <!-- Date Range Filter -->
+      <div class="section-title">Φίλτρο Ημερομηνιών</div>
+      <div class="date-filter-container">
+        <div class="date-inputs">
+          <div class="date-field">
+            <label>Από</label>
+            <input type="date" id="date-from" onchange="updateStatsUI()">
+          </div>
+          <div class="date-field">
+            <label>Έως</label>
+            <input type="date" id="date-to" onchange="updateStatsUI()">
+          </div>
+          <button class="btn-clear-date" onclick="clearDateFilter()">Clear</button>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-range">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Εύρος)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-range">0.00 km</div><div class="stat-label">🚗 Όχημα (Εύρος)</div></div>
+      </div>
+
+      <div class="section-title">Στατιστικά Μήνα</div>
       <div class="stats-grid">
         <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός</div></div>
         <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Όχημα</div></div>
+      </div>
+
+      <div class="section-title">Στατιστικά Έτους</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-year">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-year">0.00 km</div><div class="stat-label">🚗 Όχημα</div></div>
+      </div>
+
+      <div class="section-title">Συνολικά (Ανά Τύπο)</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="walk-total">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-total">0.00 km</div><div class="stat-label">🚗 Όχημα</div></div>
       </div>
       
       <div class="bg-status" id="bg-status">Αναμονή για έναρξη...</div>
@@ -74,10 +125,7 @@
     const GRID_SIZE = 0.0003, CELL_AREA_KM2 = 0.0009;
 
     function initMap() {
-      // Ανάκτηση τελευταίων δεδομένων από τη μνήμη
       const savedData = JSON.parse(localStorage.getItem('data') || '{}');
-      
-      // Αν υπάρχει αποθηκευμένη θέση, ξεκινάει εκεί. Διαφορετικά ξεκινάει από Πειραιά.
       let startPos = [37.9429, 23.6469];
       if (savedData.pathHistory && savedData.pathHistory.length > 0) {
         const last = savedData.pathHistory[savedData.pathHistory.length - 1];
@@ -96,6 +144,17 @@
       
       loadSavedData();
       map.on('move', redrawFog);
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
     }
 
     function toggleTracking() {
@@ -118,8 +177,18 @@
           pos => {
             const lat = pos.coords.latitude; 
             const lng = pos.coords.longitude;
+            const speed = pos.coords.speed || 0;
+            const now = new Date().getTime();
+
+            if (lastPosition) {
+              const dist = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
+              if (dist > 0.005) {
+                const type = (speed > 5) ? 'car' : 'walk';
+                distanceLogs.push({ dist, type, timestamp: now });
+              }
+            }
+
             lastPosition = { lat, lng };
-            
             exploredCells.add(`${Math.floor(lat / GRID_SIZE)},${Math.floor(lng / GRID_SIZE)}`);
             pathHistory.push({ lat, lng });
             polylineLayer.addLatLng([lat, lng]);
@@ -133,15 +202,11 @@
             document.getElementById('bg-status').style.color = "#00e676";
           },
           err => {
-            console.error("Location error:", err);
             document.getElementById('bg-status').innerText = "GPS Κλειστό / Χρήση τελευταίας θέσης";
             document.getElementById('bg-status').style.color = "#ff5252";
           },
-          // enableHighAccuracy: false επιτρέπει εντοπισμό και μέσω Wi-Fi/Κεραιών
           { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
         );
-      } else {
-        alert("Ο εντοπισμός τοποθεσίας δεν υποστηρίζεται στη συσκευή σας.");
       }
     }
 
@@ -162,24 +227,79 @@
       } else if (pathHistory.length > 0) {
         const last = pathHistory[pathHistory.length - 1];
         map.setView([last.lat, last.lng], 17);
-      } else {
-        alert("Δεν βρέθηκε καταγεγραμμένη θέση.");
       }
+    }
+
+    function clearDateFilter() {
+      document.getElementById('date-from').value = '';
+      document.getElementById('date-to').value = '';
+      updateStatsUI();
     }
 
     function updateStatsUI() {
         const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-        let walk = 0, car = 0;
+        const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+
+        const dateFromVal = document.getElementById('date-from').value;
+        const dateToVal = document.getElementById('date-to').value;
+        
+        const customFrom = dateFromVal ? new Date(dateFromVal).setHours(0,0,0,0) : null;
+        const customTo = dateToVal ? new Date(dateToVal).setHours(23,59,59,999) : null;
+
+        let walkToday = 0, carToday = 0;
+        let walkRange = 0, carRange = 0;
+        let walkMonth = 0, carMonth = 0;
+        let walkYear = 0, carYear = 0;
+        let walkTotal = 0, carTotal = 0;
         
         distanceLogs.forEach(log => {
-            if(log.timestamp >= startOfMonth) {
-                if(log.type === 'walk') walk += log.dist; else car += log.dist;
+            // Υπολογισμός Σημερινών
+            if (log.timestamp >= startOfToday) {
+              if (log.type === 'walk') walkToday += log.dist; else carToday += log.dist;
+            }
+
+            // Υπολογισμός Εύρους
+            if (customFrom || customTo) {
+              const matchesFrom = customFrom ? log.timestamp >= customFrom : true;
+              const matchesTo = customTo ? log.timestamp <= customTo : true;
+              if (matchesFrom && matchesTo) {
+                if (log.type === 'walk') walkRange += log.dist; else carRange += log.dist;
+              }
+            }
+
+            // Υπολογισμοί Προεπιλεγμένων Διαστημάτων
+            if (log.type === 'walk') {
+              walkTotal += log.dist;
+              if (log.timestamp >= startOfYear) walkYear += log.dist;
+              if (log.timestamp >= startOfMonth) walkMonth += log.dist;
+            } else {
+              carTotal += log.dist;
+              if (log.timestamp >= startOfYear) carYear += log.dist;
+              if (log.timestamp >= startOfMonth) carMonth += log.dist;
             }
         });
         
-        document.getElementById('walk-month').innerText = walk.toFixed(2) + ' km';
-        document.getElementById('car-month').innerText = car.toFixed(2) + ' km';
+        document.getElementById('walk-today').innerText = walkToday.toFixed(2) + ' km';
+        document.getElementById('car-today').innerText = carToday.toFixed(2) + ' km';
+
+        document.getElementById('walk-range').innerText = walkRange.toFixed(2) + ' km';
+        document.getElementById('car-range').innerText = carRange.toFixed(2) + ' km';
+
+        document.getElementById('walk-month').innerText = walkMonth.toFixed(2) + ' km';
+        document.getElementById('car-month').innerText = carMonth.toFixed(2) + ' km';
+        
+        document.getElementById('walk-year').innerText = walkYear.toFixed(2) + ' km';
+        document.getElementById('car-year').innerText = carYear.toFixed(2) + ' km';
+
+        document.getElementById('walk-total').innerText = walkTotal.toFixed(2) + ' km';
+        document.getElementById('car-total').innerText = carTotal.toFixed(2) + ' km';
+
+        // Συνολική απόσταση
+        const grandTotal = walkTotal + carTotal;
+        document.getElementById('grand-total-dist').innerText = grandTotal.toFixed(2);
+
         document.getElementById('explored-area').innerText = (exploredCells.size * CELL_AREA_KM2).toFixed(3);
     }
 
