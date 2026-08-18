@@ -10,31 +10,32 @@
     body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background-color: #121212; color: #ffffff; }
     #app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
     
-    #map-container { position: relative; flex: 1; width: 100%; height: 50vh; } /* Ορίζουμε σταθερό χώρο για τον χάρτη */
+    #map-container { position: relative; flex: 1; width: 100%; height: 45vh; }
     #map, #fog-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #fog-canvas { pointer-events: none; z-index: 400; }
     
+    /* Διόρθωση Scrolling για Samsung Internet & Mobile Chrome */
     #stats-panel { 
       background: #1e1e1e; 
-      padding: 10px; 
+      padding: 12px; 
       border-top-left-radius: 16px; 
       border-top-right-radius: 16px; 
       box-shadow: 0 -4px 20px rgba(0,0,0,0.5); 
       z-index: 1000; 
-      flex: 0 0 auto; /* Δεν θα μεγαλώνει παραπάνω από όσο χρειάζεται */
-      max-height: 50vh; /* Περιορισμός ύψους για να υπάρχει πάντα χώρος για scroll */
-      overflow-y: auto; /* Εδώ μπαίνει η μπάρα κύλισης */
+      height: 55vh; 
+      max-height: 55vh; 
+      overflow-y: scroll !important; 
+      -webkit-overflow-scrolling: touch !important; 
+      touch-action: pan-y !important; 
       display: flex; 
       flex-direction: column; 
       gap: 8px; 
     }
 
     .total-banner { background: #2979ff; color: white; text-align: center; padding: 6px; border-radius: 8px; font-weight: bold; font-size: 12px; }
-
     .section-title { font-size: 8px; color: #888; text-transform: uppercase; font-weight: bold; margin-top: 4px; }
 
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #2a2a2a; padding: 6px; border-radius: 8px; }
-    
     .stat-box { text-align: center; background: #1e1e1e; padding: 4px; border-radius: 6px; }
     .stat-value { font-size: 11px; font-weight: bold; color: #00e676; }
     .stat-label { font-size: 8px; color: #aaaaaa; text-transform: uppercase; margin-top: 1px; }
@@ -43,8 +44,8 @@
     .date-inputs { display: flex; gap: 4px; }
     .date-field { flex: 1; display: flex; flex-direction: column; }
     .date-field label { font-size: 8px; color: #aaa; text-transform: uppercase; }
-    .date-field input { background: #1e1e1e; border: 1px solid #444; color: #fff; padding: 2px; border-radius: 4px; font-size: 10px; }
-    .filter-btn { background: #00e676; color: #121212; border: none; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    .date-field input { background: #1e1e1e; border: 1px solid #444; color: #fff; padding: 4px; border-radius: 4px; font-size: 10px; }
+    .filter-btn { background: #00e676; color: #121212; border: none; padding: 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
 
     .button-group { display: flex; gap: 4px; }
     .btn { padding: 8px; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; flex: 1; }
@@ -61,7 +62,7 @@
     input:checked + .slider { background-color: #00e676; }
     input:checked + .slider:before { transform: translateX(14px); }
 
-    .bg-status { font-size: 8px; text-align: center; color: #888; margin-top: 4px; }
+    .bg-status { font-size: 8px; text-align: center; color: #888; margin-top: 4px; padding-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -111,12 +112,12 @@
 
       <div class="section-title">Στατιστικα</div>
       <div class="stats-grid">
-        <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Μήνας</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Μήνας</div></div>
-        <div class="stat-box"><div class="stat-value" id="walk-year">0.00 km</div><div class="stat-label">🚶‍♂️ Έτος</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-year">0.00 km</div><div class="stat-label">🚗 Έτος</div></div>
-        <div class="stat-box"><div class="stat-value" id="walk-distance">0.00 km</div><div class="stat-label">🚶‍♂️ Σύνολο</div></div>
-        <div class="stat-box"><div class="stat-value" id="car-distance">0.00 km</div><div class="stat-label">🚗 Σύνολο</div></div>
+        <div class="stat-box"><div class="stat-value" id="walk-month">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Μήνας)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-month">0.00 km</div><div class="stat-label">🚗 Όχημα (Μήνας)</div></div>
+        <div class="stat-box"><div class="stat-value" id="walk-year">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Έτος)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-year">0.00 km</div><div class="stat-label">🚗 Όχημα (Έτος)</div></div>
+        <div class="stat-box"><div class="stat-value" id="walk-distance">0.00 km</div><div class="stat-label">🚶‍♂️ Πεζός (Σύνολο)</div></div>
+        <div class="stat-box"><div class="stat-value" id="car-distance">0.00 km</div><div class="stat-label">🚗 Όχημα (Σύνολο)</div></div>
       </div>
 
       <div class="mode-container">
@@ -130,11 +131,9 @@
     </div>
   </div>
 
-  <audio id="silent-audio" loop style="display:none;"><source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==" type="audio/wav"></audio>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    let map, canvas, ctx, watchId = null, lastPosition = null, pathHistory = [], exploredCells = new Set(), distanceLogs = [], useHighAccuracy = true, wakeLock = null;
+    let map, canvas, ctx, watchId = null, lastPosition = null, pathHistory = [], exploredCells = new Set(), distanceLogs = [], polylineLayer = null, wakeLock = null;
     const GRID_SIZE = 0.0003, CELL_AREA_KM2 = 0.0009;
 
     function initMap() {
@@ -160,6 +159,26 @@
       else navigator.geolocation.getCurrentPosition(pos => map.setView([pos.coords.latitude, pos.coords.longitude], 17));
     }
 
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('bg-status').innerText = "Background Mode: ΕΝΕΡΓΟ (Wake Lock)";
+          document.getElementById('bg-status').style.color = "#00e676";
+        }
+      } catch (err) {
+        document.getElementById('bg-status').innerText = "Background Mode: Standby GPS";
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; });
+      }
+      document.getElementById('bg-status').innerText = "Background Mode: Απενεργοποιημένο";
+      document.getElementById('bg-status').style.color = "#888";
+    }
+
     function toggleTracking() {
       if (watchId === null) startTracking();
       else stopTracking();
@@ -167,6 +186,7 @@
 
     function startTracking() {
       if ('geolocation' in navigator) {
+        requestWakeLock();
         watchId = navigator.geolocation.watchPosition(pos => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
@@ -174,7 +194,8 @@
           if (lastPosition) {
              const dist = calculateDistance(lastPosition.lat, lastPosition.lng, lat, lng);
              if (dist > 0.004) {
-               const type = (pos.coords.speed * 3.6 >= 15) ? 'car' : 'walk';
+               const speedKmh = pos.coords.speed ? pos.coords.speed * 3.6 : 0;
+               const type = speedKmh >= 15 ? 'car' : 'walk';
                distanceLogs.push({ dist, type, timestamp: Date.now() });
                pathHistory.push({ lat, lng });
                polylineLayer.addLatLng([lat, lng]);
@@ -185,20 +206,30 @@
           map.setView([lat, lng]);
           redrawFog();
           updateStatsUI();
-        }, null, { enableHighAccuracy: true });
+        }, null, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
         document.getElementById('track-btn').innerText = "Παύση";
+        document.getElementById('track-btn').style.backgroundColor = "#ff9800";
       }
     }
 
     function stopTracking() {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      document.getElementById('track-btn').innerText = "Έναρξη";
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        releaseWakeLock();
+        document.getElementById('track-btn').innerText = "Έναρξη";
+        document.getElementById('track-btn').style.backgroundColor = "#2979ff";
+      }
     }
 
+    function applyDateFilter() { updateStatsUI(); }
+
     function updateStatsUI() {
-      const start = new Date(document.getElementById('start-date').value).getTime();
-      const end = new Date(document.getElementById('end-date').value).getTime() + 86400000;
+      const startVal = document.getElementById('start-date').value;
+      const endVal = document.getElementById('end-date').value;
+      const start = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
+      const end = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
+
       let walk = 0, car = 0;
       distanceLogs.forEach(log => {
         if (log.timestamp >= start && log.timestamp <= end) {
@@ -220,9 +251,10 @@
     function saveData() { localStorage.setItem('data', JSON.stringify({pathHistory, exploredCells: Array.from(exploredCells), distanceLogs})); }
     function loadSavedData() { 
         const d = JSON.parse(localStorage.getItem('data')); 
-        if(d) { pathHistory = d.pathHistory; exploredCells = new Set(d.exploredCells); distanceLogs = d.distanceLogs; }
+        if(d) { pathHistory = d.pathHistory || []; exploredCells = new Set(d.exploredCells || []); distanceLogs = d.distanceLogs || []; }
+        updateStatsUI();
     }
-    function resetData() { localStorage.clear(); location.reload(); }
+    function resetData() { if(confirm('Επανεκκίνηση όλων;')) { localStorage.clear(); location.reload(); } }
     function redrawFog() { 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalCompositeOperation = 'destination-out';
